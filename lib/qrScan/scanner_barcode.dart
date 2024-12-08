@@ -25,12 +25,8 @@ class ScannedBarcodeLabel extends StatelessWidget {
         }
         String? token = scannedBarcodes.first.displayValue;
 
-        /* decode() method will decode your token's payload */
-        Map<String, dynamic> decodedToken = JwtDecoder.decode(token!);
-        // Now you can use your decoded token
-        print(decodedToken["name"]);
-
-        return Text( decodedToken["url"],
+        return Text(
+          token!,
           overflow: TextOverflow.fade,
           style: const TextStyle(color: Colors.white),
         );

@@ -165,6 +165,18 @@ class ConnectPageState extends State<ConnectPage> {
         ),
       );
     }
+    return  Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // AppKitModalNetworkSelectButton(
+        //   appKit: widget.appKitModal,
+        // ),
+        // const SizedBox.square(dimension: 8.0),
+        AppKitModalConnectButton(
+          appKit: widget.appKitModal,
+        ),
+      ],
+    );
 
     return ListView(
       padding: const EdgeInsets.symmetric(
@@ -185,18 +197,7 @@ class ConnectPageState extends State<ConnectPage> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: StyleConstants.linear8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AppKitModalNetworkSelectButton(
-              appKit: widget.appKitModal,
-            ),
-            const SizedBox.square(dimension: 8.0),
-            AppKitModalConnectButton(
-              appKit: widget.appKitModal,
-            ),
-          ],
-        ),
+
         const SizedBox(height: StyleConstants.linear8),
         Visibility(
           visible: widget.appKitModal.isConnected,
@@ -458,6 +459,7 @@ class ConnectPageState extends State<ConnectPage> {
     if (event == null) return;
 
     setState(() => _selectedChains.clear());
+
 
     if (_shouldDismissQrCode && Navigator.canPop(context)) {
       _shouldDismissQrCode = false;

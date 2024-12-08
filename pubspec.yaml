@@ -23,8 +23,7 @@ dependencies:
   mobile_scanner: ^6.0.1
   image_picker: ^1.1.2
   jwt_decoder: ^2.0.1
-  animated_rating_bar: ^0.0.8
-
+  flutter_pannable_rating_bar: ^2.7.2+1
 
 dev_dependencies:
   build_runner: ^2.4.7

@@ -1,9 +1,15 @@
-import 'package:animated_rating_bar/widgets/animated_rating_bar.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_pannable_rating_bar/flutter_pannable_rating_bar.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:placeholder/qrScan/scanner_barcode.dart';
 import 'package:placeholder/qrScan/scanner_error.dart';
 import 'package:reown_appkit/reown_appkit.dart';
+
+import '../utils/constants.dart';
+import '../utils/crypto/helpers.dart';
+import '../widgets/method_dialog.dart';
 
 class BarcodeScannerWithOverlay extends StatefulWidget {
   final ReownAppKitModal appKitModal;
@@ -22,16 +28,58 @@ class BarcodeScannerWithOverlay extends StatefulWidget {
       _BarcodeScannerWithOverlayState();
 }
 
-class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
+class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> with WidgetsBindingObserver {
   final MobileScannerController controller = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
   );
   final List<ReownAppKitModalNetworkInfo> _selectedChains = [];
   bool _shouldDismissQrCode = true;
+  double rating = 0;
+
+  StreamSubscription<Object?>? _subscription;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // If the controller is not ready, do not try to start or stop it.
+    // Permission dialogs can trigger lifecycle changes before the controller is ready.
+    if (!controller.value.hasCameraPermission) {
+      return;
+    }
+
+    switch (state) {
+      case AppLifecycleState.detached:
+        break;
+      case AppLifecycleState.hidden:
+        break;
+      case AppLifecycleState.paused:
+        break;
+      case AppLifecycleState.resumed:
+      // Restart the scanner when the app is resumed.
+      // Don't forget to resume listening to the barcode events.
+      //   _subscription  = controller.barcodes.listen(_handleBarcode);
+
+        unawaited(controller.start());
+        break;
+      case AppLifecycleState.inactive:
+      // Stop the scanner when the app is paused.
+      // Also stop the barcode events subscription.
+        unawaited(_subscription?.cancel());
+        _subscription = null;
+        unawaited(controller.stop());
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    // Start listening to lifecycle changes.
+    WidgetsBinding.instance.addObserver(this);
+
+    // Start listening to the barcode events.
+    // _subscription = controller.barcodes.listen(_handleBarcode);
+
+    // Finally, start the scanner itself.
+    unawaited(controller.start());
     widget.appKitModal.onModalConnect.subscribe(_onModalConnect);
     widget.appKitModal.onModalUpdate.subscribe(_onModalUpdate);
     widget.appKitModal.onModalNetworkChange.subscribe(_onModalNetworkChange);
@@ -78,6 +126,8 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
   void _onSessionConnect(SessionConnect? event) async {
     if (event == null) return;
 
+    print(event.session.self.publicKey);
+
     setState(() => _selectedChains.clear());
 
     if (_shouldDismissQrCode && Navigator.canPop(context)) {
@@ -102,6 +152,15 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
     widget.appKitModal.appKit!.onSessionConnect.unsubscribe(
       _onSessionConnect,
     );
+    await controller.dispose();
+    // Stop listening to lifecycle changes.
+    WidgetsBinding.instance.removeObserver(this);
+    // Stop listening to the barcode events.
+    unawaited(_subscription?.cancel());
+    _subscription = null;
+    // Dispose the widget itself.
+    super.dispose();
+    // Finally, dispose of the controller.
     await controller.dispose();
     super.dispose();
   }
@@ -160,16 +219,31 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
                 ),
               ),
               padding: const EdgeInsets.all(16.0),
-              child: AnimatedRatingBar(
-                activeFillColor: Theme.of(context).colorScheme.inversePrimary,
-                strokeColor: Colors.amber,
-                initialRating: 0,
-                height: 60,
-                width: MediaQuery.of(context).size.width,
-                animationColor: Colors.amber,
-                onRatingUpdate: (rating) {
-                  debugPrint(rating.toString());
-                },
+              child:  PannableRatingBar(
+                rate: rating,
+                onChanged: updateRating,
+                spacing: 20,
+                items: List.generate(
+                  5,
+                      (index) => const RatingWidget(
+                    selectedColor: Colors.yellow,
+                    unSelectedColor: Colors.grey,
+                    child: Icon(
+                      Icons.star,
+                      size: 48,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: Container(
+              width: double.infinity,
+              height: 100,
+              child:  AppKitModalConnectButton(
+                appKit: widget.appKitModal,
               ),
             ),
           ),
@@ -177,6 +251,13 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> {
       ),
     );
   }
+
+  void updateRating(double value) {
+    setState(() {
+      rating = value;
+    });
+  }
+
 }
 
 class ScannerOverlay extends CustomPainter {

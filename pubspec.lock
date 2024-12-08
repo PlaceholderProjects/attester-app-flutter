@@ -30,14 +30,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.7.0"
-  animated_rating_bar:
-    dependency: "direct main"
-    description:
-      name: animated_rating_bar
-      sha256: afe39702d1e70e8f36b514208b8ad230550dc9631de4092910dee593fef7437a
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.8"
   ansicolor:
     dependency: transitive
     description:
@@ -507,6 +499,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.3"
+  flutter_pannable_rating_bar:
+    dependency: "direct main"
+    description:
+      name: flutter_pannable_rating_bar
+      sha256: a6ba1f474ccb23e1b0b7d0a0ec28bb31c088bad808fd207b536b3cb46cbcaf7a
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.7.2+1"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -1037,22 +1037,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.4"
-  rive:
-    dependency: transitive
-    description:
-      name: rive
-      sha256: f2117a96a189758bc79bf7933865625c7a44a420ae537d2a8f6c492900136a71
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.11.17"
-  rive_common:
-    dependency: transitive
-    description:
-      name: rive_common
-      sha256: e41f12917cb58e0c9376836490ebaa431e12744da0c67e19dad8d4bee9fedd46
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.2.7"
   rxdart:
     dependency: transitive
     description:
