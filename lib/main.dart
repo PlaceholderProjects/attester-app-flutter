@@ -300,40 +300,40 @@ class _MyHomePageState extends State<MyHomePage> {
         title: StringConstants.scanPageTitle,
         icon: Icons.qr_code,
       ),
-      PageData(
-        page: ConnectPage(
-          appKitModal: _appKitModal!,
-          linkMode: linkMode,
-          reinitialize: (bool linkMode) async {
-            final result = await showDialog<bool>(
-              context: context,
-              builder: (BuildContext context) {
-                return AlertDialog(
-                  content: Text('App will be closed to apply changes'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text('Ok'),
-                    ),
-                  ],
-                );
-              },
-            );
-            if (result == true) {
-              await prefs.setBool('appkit_sample_linkmode', linkMode);
-              if (!kDebugMode) {
-                exit(0);
-              }
-            }
-          },
-        ),
-        title: StringConstants.connectPageTitle,
-        icon: Icons.home,
-      ),
+      // PageData(
+      //   page: ConnectPage(
+      //     appKitModal: _appKitModal!,
+      //     linkMode: linkMode,
+      //     reinitialize: (bool linkMode) async {
+      //       final result = await showDialog<bool>(
+      //         context: context,
+      //         builder: (BuildContext context) {
+      //           return AlertDialog(
+      //             content: Text('App will be closed to apply changes'),
+      //             actions: [
+      //               TextButton(
+      //                 onPressed: () => Navigator.of(context).pop(false),
+      //                 child: Text('Cancel'),
+      //               ),
+      //               TextButton(
+      //                 onPressed: () => Navigator.of(context).pop(true),
+      //                 child: Text('Ok'),
+      //               ),
+      //             ],
+      //           );
+      //         },
+      //       );
+      //       if (result == true) {
+      //         await prefs.setBool('appkit_sample_linkmode', linkMode);
+      //         if (!kDebugMode) {
+      //           exit(0);
+      //         }
+      //       }
+      //     },
+      //   ),
+      //   title: StringConstants.connectPageTitle,
+      //   icon: Icons.home,
+      // ),
       PageData(
         page: PairingsPage(appKitModal: _appKitModal!),
         title: StringConstants.pairingsPageTitle,

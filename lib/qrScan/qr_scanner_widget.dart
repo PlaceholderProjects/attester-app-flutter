@@ -1,15 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pannable_rating_bar/flutter_pannable_rating_bar.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:placeholder/qrScan/scanner_barcode.dart';
 import 'package:placeholder/qrScan/scanner_error.dart';
 import 'package:reown_appkit/reown_appkit.dart';
-
-import '../utils/constants.dart';
-import '../utils/crypto/helpers.dart';
-import '../widgets/method_dialog.dart';
 
 class BarcodeScannerWithOverlay extends StatefulWidget {
   final ReownAppKitModal appKitModal;
@@ -28,20 +27,27 @@ class BarcodeScannerWithOverlay extends StatefulWidget {
       _BarcodeScannerWithOverlayState();
 }
 
-class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> with WidgetsBindingObserver {
+class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay>
+    with WidgetsBindingObserver {
   final MobileScannerController controller = MobileScannerController(
     formats: const [BarcodeFormat.qrCode],
+    autoStart: true,
+    torchEnabled: false,
+    useNewCameraSelector: true,
   );
   final List<ReownAppKitModalNetworkInfo> _selectedChains = [];
   bool _shouldDismissQrCode = true;
   double rating = 0;
+  String qRPayload = '';
 
   StreamSubscription<Object?>? _subscription;
 
+  String userWalletAddress = '';
+
+  late AlertDialog alert;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // If the controller is not ready, do not try to start or stop it.
-    // Permission dialogs can trigger lifecycle changes before the controller is ready.
     if (!controller.value.hasCameraPermission) {
       return;
     }
@@ -52,20 +58,25 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
       case AppLifecycleState.hidden:
         break;
       case AppLifecycleState.paused:
-        break;
+        return;
       case AppLifecycleState.resumed:
-      // Restart the scanner when the app is resumed.
-      // Don't forget to resume listening to the barcode events.
-      //   _subscription  = controller.barcodes.listen(_handleBarcode);
+        _subscription = controller.barcodes.listen(restartQr);
 
         unawaited(controller.start());
         break;
       case AppLifecycleState.inactive:
-      // Stop the scanner when the app is paused.
-      // Also stop the barcode events subscription.
         unawaited(_subscription?.cancel());
         _subscription = null;
         unawaited(controller.stop());
+        break;
+    }
+  }
+
+  void restartQr(BarcodeCapture event) {
+    if (mounted) {
+      setState(() {
+        qRPayload = event.barcodes.first.displayValue!;
+      });
     }
   }
 
@@ -75,10 +86,8 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
     // Start listening to lifecycle changes.
     WidgetsBinding.instance.addObserver(this);
 
-    // Start listening to the barcode events.
-    // _subscription = controller.barcodes.listen(_handleBarcode);
+    _subscription = controller.barcodes.listen(restartQr);
 
-    // Finally, start the scanner itself.
     unawaited(controller.start());
     widget.appKitModal.onModalConnect.subscribe(_onModalConnect);
     widget.appKitModal.onModalUpdate.subscribe(_onModalUpdate);
@@ -126,7 +135,7 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
   void _onSessionConnect(SessionConnect? event) async {
     if (event == null) return;
 
-    print(event.session.self.publicKey);
+    userWalletAddress = event.session.self.publicKey;
 
     setState(() => _selectedChains.clear());
 
@@ -152,15 +161,10 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
     widget.appKitModal.appKit!.onSessionConnect.unsubscribe(
       _onSessionConnect,
     );
-    await controller.dispose();
-    // Stop listening to lifecycle changes.
     WidgetsBinding.instance.removeObserver(this);
-    // Stop listening to the barcode events.
     unawaited(_subscription?.cancel());
     _subscription = null;
-    // Dispose the widget itself.
     super.dispose();
-    // Finally, dispose of the controller.
     await controller.dispose();
     super.dispose();
   }
@@ -189,7 +193,9 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
               overlayBuilder: (context, constraints) {
                 return Container(
                   margin: const EdgeInsets.only(top: 500),
-                  child: ScannedBarcodeLabel(barcodes: controller.barcodes),
+                  child: ScannedBarcodeLabel(
+                      barcodes: controller.barcodes,
+                      onTokenScanned: updatePayload),
                 );
               },
             ),
@@ -219,13 +225,13 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
                 ),
               ),
               padding: const EdgeInsets.all(16.0),
-              child:  PannableRatingBar(
+              child: PannableRatingBar(
                 rate: rating,
                 onChanged: updateRating,
                 spacing: 20,
                 items: List.generate(
                   5,
-                      (index) => const RatingWidget(
+                  (index) => const RatingWidget(
                     selectedColor: Colors.yellow,
                     unSelectedColor: Colors.grey,
                     child: Icon(
@@ -242,7 +248,7 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
             child: Container(
               width: double.infinity,
               height: 100,
-              child:  AppKitModalConnectButton(
+              child: AppKitModalConnectButton(
                 appKit: widget.appKitModal,
               ),
             ),
@@ -252,12 +258,159 @@ class _BarcodeScannerWithOverlayState extends State<BarcodeScannerWithOverlay> w
     );
   }
 
+  void updatePayload(String payload) {
+    qRPayload = payload;
+    // print(qRPayload);
+  }
+
   void updateRating(double value) {
     setState(() {
       rating = value;
+      final chainId = widget.appKitModal.selectedChain?.chainId ?? '';
+      if (chainId.isNotEmpty) {
+        final namespace =
+        ReownAppKitModalNetworks.getNamespaceForChainId(
+          chainId,
+        );
+        userWalletAddress =
+            widget.appKitModal.session?.getAddress(namespace) ?? '';
+      }
+      if(userWalletAddress.isEmpty){
+        const snackBar = SnackBar(
+          /// need to set following properties for best effect of awesome_snackbar_content
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.transparent,
+          content: AwesomeSnackbarContent(
+            title: 'Uh Oh!',
+            message: 'Please connect your wallet to rate',
+
+            /// change contentType to ContentType.success, ContentType.warning or ContentType.help for variants
+            contentType: ContentType.failure,
+          ),
+        );
+
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(snackBar);
+        rating = 0;
+        setState(() {});
+        return;
+      }
+      //alert dialog with submit rating
+      alert = AlertDialog(
+        title: const Text('Submit Rating'),
+        content: const Text('Are you sure you want to submit this rating?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              print('Publisher Wallet Address $qRPayload');
+              final chainId = widget.appKitModal.selectedChain?.chainId ?? '';
+              if (chainId.isNotEmpty) {
+                final namespace =
+                    ReownAppKitModalNetworks.getNamespaceForChainId(
+                  chainId,
+                );
+                userWalletAddress =
+                    widget.appKitModal.session?.getAddress(namespace) ?? '';
+              }
+              print('User Wallet Address$userWalletAddress');
+              setState(() {});
+              rating = 0;
+              setState(() {});
+            },
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              //show small loader alert
+              showDialog(
+                context: context,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+              final chainId = widget.appKitModal.selectedChain?.chainId ?? '';
+              if (chainId.isNotEmpty) {
+                final namespace =
+                    ReownAppKitModalNetworks.getNamespaceForChainId(
+                  chainId,
+                );
+                userWalletAddress =
+                    widget.appKitModal.session?.getAddress(namespace) ?? '';
+              }
+              var headers = {'Content-Type': 'application/json'};
+              var data = json.encode({
+                "publisherAddress": "$qRPayload",
+                "userAddress": "${userWalletAddress}",
+                "rating": value.toInt(),
+                "signature": "0x123"
+              });
+              var dio = Dio();
+              var response = await dio.request(
+                'https://liz4000.athelstantechnolabs.com/api/attestation',
+                options: Options(
+                  method: 'POST',
+                  headers: headers,
+                ),
+                data: data,
+              );
+
+              if (response.statusCode == 200) {
+                print(response.data);
+                Navigator.of(context).pop();
+                const snackBar = SnackBar(
+                  /// need to set following properties for best effect of awesome_snackbar_content
+                  elevation: 0,
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.transparent,
+                  content: AwesomeSnackbarContent(
+                    title: 'Thank you for rating!',
+                    message: 'Checkout for the reputation score to validate',
+
+                    /// change contentType to ContentType.success, ContentType.warning or ContentType.help for variants
+                    contentType: ContentType.success,
+                  ),
+                );
+
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(snackBar);
+                rating = 0;
+                setState(() {});
+              } else {
+                Navigator.of(context).pop();
+                const snackBar = SnackBar(
+                  /// need to set following properties for best effect of awesome_snackbar_content
+                  elevation: 0,
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.transparent,
+                  content: AwesomeSnackbarContent(
+                    title: 'Uh Oh!',
+                    message: 'Could not submit rating',
+
+                    /// change contentType to ContentType.success, ContentType.warning or ContentType.help for variants
+                    contentType: ContentType.failure,
+                  ),
+                );
+
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(snackBar);
+                print(response.statusMessage);
+                rating = 0;
+                setState(() {});
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      );
+      showDialog(context: context, builder: (context) => alert);
     });
   }
-
 }
 
 class ScannerOverlay extends CustomPainter {
